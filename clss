@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Online CSS Example</title>
+    <style>
+        body {
+            background-color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Hello, world! 2400032562</h1>
+</body>
+</html>
