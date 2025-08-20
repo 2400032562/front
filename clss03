@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   
+    <title>Java script</title>
+</head>
+<body>
+    <p id="text">Java script demo 2400032562 </p>
+    <button onclick="document.getElementById('text').innerHTML = 'Text Changed'">
+        Change Text
+    </button>
+    <p id="styleText">The text will turn red</p>
+    <button onclick="document.getElementById('styleText').style.color = 'red' ">
+        Make red
+    </button>
+    <div id="box" style > </div>
+
+
+    <br> <br>
+     <input type="text" id="name input" placeholder="Enter your name">
+     <button onclick="alert('Hello, ' + document.getElementById('nameInput').value)">Submit</button>
+     
+    
+</body>
+</html>
