@@ -1,0 +1,332 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SPARS - Student Performance Analytics & Reporting System</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body{background:#f5f7fb}
+    .card{box-shadow:0 6px 18px rgba(0,0,0,0.06)}
+    .pointer{cursor:pointer}
+    .small-muted{font-size:0.85rem;color:#6c757d}
+    .chart-container{height:320px}
+    pre{white-space:pre-wrap}
+  </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="#">SPARS</a>
+    <div class="d-flex">
+      <button class="btn btn-outline-light me-2" id="adminBtn">Admin Login</button>
+      <button class="btn btn-outline-light" id="studentBtn">Student View</button>
+    </div>
+  </div>
+</nav>
+
+<div class="container my-4">
+  <div class="row">
+    <div class="col-lg-4">
+      <div class="card p-3 mb-3">
+        <h5>Data Controls</h5>
+        <div class="mb-2">
+          <label class="form-label">Upload CSV (id,name,subject,marks)</label>
+          <input type="file" class="form-control" id="csvFile">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Add Single Record</label>
+          <input class="form-control mb-1" id="inId" placeholder="Student ID">
+          <input class="form-control mb-1" id="inName" placeholder="Student Name">
+          <input class="form-control mb-1" id="inSubject" placeholder="Subject">
+          <input class="form-control mb-1" id="inMarks" placeholder="Marks">
+          <button class="btn btn-primary btn-sm mt-1" id="addRecord">Add Record</button>
+        </div>
+        <hr>
+        <div>
+          <button class="btn btn-success btn-sm" id="saveData">Save Data (Export JSON)</button>
+          <button class="btn btn-secondary btn-sm" id="loadSample">Load Sample Data</button>
+          <button class="btn btn-danger btn-sm" id="clearData">Clear All Data</button>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3" id="adminPanel" style="display:none">
+        <h5>Admin Panel</h5>
+        <div class="mb-2">
+          <label class="form-label">Generate Report for Student ID</label>
+          <input class="form-control mb-1" id="reportId" placeholder="Student ID">
+          <button class="btn btn-outline-primary btn-sm" id="genPdf">Generate PDF</button>
+        </div>
+        <hr>
+        <div>
+          <strong>Export / Import</strong>
+          <div class="mt-2">
+            <button class="btn btn-outline-dark btn-sm" id="exportJSON">Export JSON</button>
+            <input type="file" class="form-control form-control-sm mt-1" id="importJSON">
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-3" id="studentPanel" style="display:none">
+        <h5>Student View</h5>
+        <div class="mb-2">
+          <input class="form-control" id="studentIdInput" placeholder="Enter Student ID">
+          <button class="btn btn-primary btn-sm mt-2" id="viewStudent">View</button>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="col-lg-8">
+      <div class="card p-3 mb-3">
+        <h5>Class Records</h5>
+        <div class="table-responsive">
+          <table class="table table-striped" id="recordsTable">
+            <thead><tr><th>ID</th><th>Name</th><th>Subject</th><th>Marks</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card p-3 mb-3">
+        <h5>Analytics Dashboard</h5>
+        <div class="row">
+          <div class="col-md-6">
+            <div class="chart-container"><canvas id="avgChart"></canvas></div>
+          </div>
+          <div class="col-md-6">
+            <div class="chart-container"><canvas id="distChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card p-3" id="studentReportCard" style="display:none">
+        <h5>Student Report</h5>
+        <div id="studentReportContent"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Modals -->
+<div class="modal fade" id="loginModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Admin Login</h5></div>
+      <div class="modal-body">
+        <input class="form-control" id="adminPassword" placeholder="Enter password">
+        <div class="form-text small-muted mt-2">demo password: teacher123</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button class="btn btn-primary" id="loginSubmit">Login</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+// Simple client-side app
+const STORAGE_KEY = 'spars_records_v1';
+let records = []; // {id,name,subject,marks}
+
+// Utilities
+function saveToStorage(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(records)); }
+function loadFromStorage(){ const v = localStorage.getItem(STORAGE_KEY); records = v? JSON.parse(v): []; renderTable(); updateAnalytics(); }
+
+function renderTable(){
+  const tbody = document.querySelector('#recordsTable tbody'); tbody.innerHTML='';
+  records.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.id}</td><td>${r.name}</td><td>${r.subject}</td><td>${r.marks}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateAnalytics(){
+  // subject-wise average
+  const bySubject = {};
+  records.forEach(r=>{
+    if(!bySubject[r.subject]) bySubject[r.subject]={sum:0,count:0};
+    bySubject[r.subject].sum += Number(r.marks);
+    bySubject[r.subject].count +=1;
+  });
+  const labels = Object.keys(bySubject);
+  const averages = labels.map(s=> Math.round(bySubject[s].sum / bySubject[s].count *100)/100 );
+
+  // distribution of marks (buckets)
+  const buckets = { '<40':0, '40-59':0, '60-79':0, '80+':0 };
+  records.forEach(r=>{
+    const m = Number(r.marks);
+    if(m<40) buckets['<40']++;
+    else if(m<60) buckets['40-59']++;
+    else if(m<80) buckets['60-79']++;
+    else buckets['80+']++;
+  });
+
+  drawBarChart('avgChart', labels, averages, 'Subject Average Marks');
+  drawPieChart('distChart', Object.keys(buckets), Object.values(buckets), 'Marks Distribution');
+}
+
+let barChart=null, pieChart=null;
+function drawBarChart(id, labels, data, title){
+  const ctx = document.getElementById(id);
+  if(barChart) barChart.destroy();
+  barChart = new Chart(ctx, {type:'bar', data:{labels, datasets:[{label:title, data}]}, options:{responsive:true}});
+}
+function drawPieChart(id, labels, data, title){
+  const ctx = document.getElementById(id);
+  if(pieChart) pieChart.destroy();
+  pieChart = new Chart(ctx, {type:'pie', data:{labels, datasets:[{label:title, data}]}, options:{responsive:true}});
+}
+
+// CSV upload
+document.getElementById('csvFile').addEventListener('change', (e)=>{
+  const f = e.target.files[0]; if(!f) return;
+  Papa.parse(f, {header:true, skipEmptyLines:true, complete: (res)=>{
+    const data = res.data;
+    // expected columns: id,name,subject,marks (case-insensitive)
+    data.forEach(row=>{
+      const id = row.id || row.ID || row.Id || row.studentId || row.studentID || '';
+      const name = row.name || row.Name || '';
+      const subject = row.subject || row.Subject || row.sub || 'General';
+      const marks = row.marks || row.Marks || row.score || 0;
+      if(id && name) records.push({id:String(id).trim(), name:String(name).trim(), subject:String(subject).trim(), marks:Number(marks)});
+    });
+    saveToStorage(); renderTable(); updateAnalytics();
+  }});
+});
+
+// Add single record
+document.getElementById('addRecord').addEventListener('click', ()=>{
+  const id = document.getElementById('inId').value.trim();
+  const name = document.getElementById('inName').value.trim();
+  const subject = document.getElementById('inSubject').value.trim() || 'General';
+  const marks = Number(document.getElementById('inMarks').value.trim() || 0);
+  if(!id || !name){ alert('Provide ID and Name'); return; }
+  records.push({id,name,subject,marks});
+  document.getElementById('inId').value=''; document.getElementById('inName').value=''; document.getElementById('inSubject').value=''; document.getElementById('inMarks').value='';
+  saveToStorage(); renderTable(); updateAnalytics();
+});
+
+// Admin login
+const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+document.getElementById('adminBtn').addEventListener('click', ()=>{ loginModal.show(); });
+document.getElementById('loginSubmit').addEventListener('click', ()=>{
+  const pw = document.getElementById('adminPassword').value;
+  if(pw==='teacher123'){
+    loginModal.hide(); document.getElementById('adminPanel').style.display='block'; document.getElementById('studentPanel').style.display='none';
+    alert('Admin login successful');
+  } else alert('Wrong password (demo: teacher123)');
+});
+
+document.getElementById('studentBtn').addEventListener('click', ()=>{
+  document.getElementById('studentPanel').style.display='block'; document.getElementById('adminPanel').style.display='none';
+});
+
+// Save data (download JSON)
+document.getElementById('saveData').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(records,null,2)],{type:'application/json'});
+  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='spars_data.json'; a.click(); URL.revokeObjectURL(url);
+});
+
+// Clear data
+document.getElementById('clearData').addEventListener('click', ()=>{
+  if(confirm('Clear all records?')){ records=[]; saveToStorage(); renderTable(); updateAnalytics(); }
+});
+
+// Load sample data
+document.getElementById('loadSample').addEventListener('click', ()=>{
+  records = [
+    {id:'S001',name:'Aisha',subject:'Math',marks:82},
+    {id:'S001',name:'Aisha',subject:'Science',marks:75},
+    {id:'S002',name:'Ravi',subject:'Math',marks:68},
+    {id:'S002',name:'Ravi',subject:'Science',marks:54},
+    {id:'S003',name:'Maya',subject:'Math',marks:92},
+    {id:'S003',name:'Maya',subject:'Science',marks:88},
+    {id:'S004',name:'Karan',subject:'Math',marks:45},
+    {id:'S004',name:'Karan',subject:'Science',marks:38}
+  ]; saveToStorage(); renderTable(); updateAnalytics();
+});
+
+// Export JSON
+document.getElementById('exportJSON').addEventListener('click', ()=>{
+  const a = document.createElement('a'); const blob = new Blob([JSON.stringify(records)],{type:'application/json'}); a.href = URL.createObjectURL(blob); a.download='spars_export.json'; a.click(); URL.revokeObjectURL(a.href);
+});
+
+// Import JSON
+document.getElementById('importJSON').addEventListener('change', (e)=>{
+  const f = e.target.files[0]; if(!f) return; const reader = new FileReader(); reader.onload = ()=>{
+    try{ const j = JSON.parse(reader.result); if(Array.isArray(j)){ records = j; saveToStorage(); renderTable(); updateAnalytics(); alert('Imported'); } else alert('Invalid JSON'); }
+    catch(err){ alert('Error parsing JSON'); }
+  }; reader.readAsText(f);
+});
+
+// Generate student report (PDF)
+document.getElementById('genPdf').addEventListener('click', async ()=>{
+  const id = document.getElementById('reportId').value.trim(); if(!id) return alert('Enter ID'); const rpt = makeStudentReport(id); if(!rpt) return alert('Student not found');
+  const { jsPDF } = window.jspdf; const doc = new jsPDF();
+  doc.setFontSize(16); doc.text('SPARS - Student Report', 14, 20);
+  doc.setFontSize(12); doc.text(`ID: ${rpt.id}`, 14, 30); doc.text(`Name: ${rpt.name}`, 14, 36);
+  doc.text(`Average Marks: ${rpt.avg}`, 14, 42);
+  // table
+  doc.autoTable({ startY:50, head:[['Subject','Marks']], body: rpt.rows.map(r=>[r.subject,String(r.marks)]) });
+  doc.save(`${rpt.id}_report.pdf`);
+});
+
+// Make student report data
+function makeStudentReport(id){
+  const rows = records.filter(r=>r.id===id);
+  if(rows.length===0) return null;
+  const name = rows[0].name || '';
+  const avg = Math.round(rows.reduce((s,r)=>s+Number(r.marks),0)/rows.length*100)/100;
+  return {id,name,avg,rows};
+}
+
+// For generating PDF we use jspdf-autoTable if available, else simple text. We'll try to include fallback.
+// Include autoTable dynamically
+(async function loadAutoTable(){
+  // try to load autoTable plugin
+  const s = document.createElement('script');
+  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js';
+  document.head.appendChild(s);
+})();
+
+// Student view
+document.getElementById('viewStudent').addEventListener('click', ()=>{
+  const id = document.getElementById('studentIdInput').value.trim(); if(!id) return alert('Enter student ID'); const rpt = makeStudentReport(id);
+  const card = document.getElementById('studentReportCard'); const content = document.getElementById('studentReportContent');
+  if(!rpt){ alert('Student not found'); card.style.display='none'; return; }
+  card.style.display='block';
+  content.innerHTML = `<p><strong>ID:</strong> ${rpt.id} <strong class="ms-3">Name:</strong> ${rpt.name}</p>`;
+  // build subject list and trend chart
+  const subs = {}; rpt.rows.forEach(r=>{ if(!subs[r.subject]) subs[r.subject]=[]; subs[r.subject].push(Number(r.marks)); });
+  let html = '<div class="row">';
+  Object.keys(subs).forEach(subject=>{ const arr = subs[subject]; const avg = Math.round(arr.reduce((a,b)=>a+b,0)/arr.length*100)/100; html += `<div class="col-md-4"><div class="card p-2 mb-2"><b>${subject}</b><div>Avg: ${avg}</div><div>Records: ${arr.length}</div></div></div>`; });
+  html += '</div><div><button class="btn btn-outline-primary btn-sm" id="downloadStudentPdf">Download PDF</button></div>';
+  content.innerHTML += html;
+  document.getElementById('downloadStudentPdf').addEventListener('click', ()=>{
+    const { jsPDF } = window.jspdf; const doc = new jsPDF(); doc.setFontSize(16); doc.text('SPARS - Student Report', 14, 20); doc.setFontSize(12); doc.text(`ID: ${rpt.id}`, 14, 30); doc.text(`Name: ${rpt.name}`, 14, 36); doc.text(`Average: ${rpt.avg}`, 14, 42);
+    // simple table
+    let y = 52; doc.setFontSize(11);
+    doc.text('Subject - Marks', 14, y); y+=6;
+    rpt.rows.forEach(r=>{ doc.text(`${r.subject} - ${r.marks}`, 14, y); y+=6; if(y>270){ doc.addPage(); y=20; } });
+    doc.save(`${rpt.id}_report.pdf`);
+  });
+});
+
+// Export/Import handled above
+
+// load at start
+loadFromStorage();
+</script>
+
+</body>
+</html>
