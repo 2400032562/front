@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Course List - Drag & Drop</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    #courseList {
+      list-style: none;
+      padding: 0;
+      max-width: 400px;
+      margin: 20px auto;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+
+    #courseList li {
+      padding: 10px 15px;
+      border-bottom: 1px solid #eee;
+      cursor: move;
+      background: #f9f9f9;
+    }
+
+    #courseList li:last-child {
+      border-bottom: none;
+    }
+
+    #courseList li.dragging {
+      opacity: 0.5;
+    }
+
+    #orderBox {
+      max-width: 400px;
+      margin: 20px auto;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: #fafafa;
+    }
+
+    #orderBox span {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Course List (Drag & Drop)</h1>
+
+  <ul id="courseList">
+    <li draggable="true">HTML & CSS Basics</li>
+    <li draggable="true">JavaScript Fundamentals</li>
+    <li draggable="true">React for Beginners</li>
+    <li draggable="true">Angular Essentials</li>
+    <li draggable="true">Node.js & Express</li>
+  </ul>
+
+  <div id="orderBox">
+    Current Order: <span id="orderOutput"></span>
+  </div>
+
+  <script>
+    const courseList = document.getElementById("courseList");
+    const orderOutput = document.getElementById("orderOutput");
+
+    let draggedItem = null;
+
+    // Initialize order display
+    updateOrder();
+
+    // Event: drag starts
+    courseList.addEventListener("dragstart", function (e) {
+      if (e.target.tagName === "LI") {
+        draggedItem = e.target;
+        e.target.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+      }
+    });
+
+    // Event: drag ends
+    courseList.addEventListener("dragend", function (e) {
+      if (e.target.tagName === "LI") {
+        e.target.classList.remove("dragging");
+      }
+    });
+
+    // Event: dragging over list
+    courseList.addEventListener("dragover", function (e) {
+      e.preventDefault(); // allow drop
+
+      const target = e.target;
+      if (target && target !== draggedItem && target.tagName === "LI") {
+        const rect = target.getBoundingClientRect();
+        const offset = e.clientY - rect.top;
+
+        // if mouse is in lower half of the target item, insert after
+        if (offset > rect.height / 2) {
+          target.after(draggedItem);
+        } else {
+          target.before(draggedItem);
+        }
+      }
+    });
+
+    // Event: on drop
+    courseList.addEventListener("drop", function (e) {
+      e.preventDefault();
+      draggedItem = null;
+      updateOrder(); // show new order
+    });
+
+    // Function to update the displayed order
+    function updateOrder() {
+      const items = courseList.querySelectorAll("li");
+      const names = Array.from(items).map((li) => li.textContent.trim());
+      orderOutput.textContent = names.join(" | ");
+    }
+  </script>
+</body>
+</html>
